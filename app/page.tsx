@@ -1,109 +1,119 @@
-'use client';
+use client';
 
 import React, { useEffect, useMemo, useState } from "react";
 
-export default function Page() {
-  const [signals, setSignals] = useState({
-    tv: 0,
-    politica: 0,
-    futbol: 0,
-    famosos: 0,
-    hora: (() => {
-      const h = new Date().getHours();
-      return h === 0 ? 24 : h;
-    })(),
-  });
+const phrases = [
+  "No pasa nada",
+  "Timeline tibio",
+  "Se está cocinando",
+  "Se viene",
+  "Noche twitera muy probable",
+  "🔥 NOCHE TWITTERA DEL CARAJO",
+];
 
+const escala = [
+  "No pasa nada",
+  "Timeline tibio",
+  "Se cocina",
+  "Se viene",
+  "Hay memes",
+  "NOCHE TWITTERA DEL CARAJO",
+];
+
+const gags = [
+  "Hoy la cosa se puede picar por los dichos de Trump sobre bombardear Irán.",
+  "Si juega Boca y hay VAR polémico, esto se va al rojo en 3 minutos.",
+  "Un ex Gran Hermano acaba de subir una historia sospechosa.",
+  "Hay olor a cadena nacional, capturas y memes de tipografía Impact.",
+];
+
+interface Config {
+  base: number;
+  tv: number;
+  politica: number;
+  futbol: number;
+  famosos: number;
+  override: boolean;
+}
+
+function calcScore(config: Config): number {
+  if (config.override) return 100;
+  const { base, tv, politica, futbol, famosos } = config;
+  const h = new Date().getHours();
+  const primeBoost = h >= 21 ? 10 : h >= 18 ? 5 : 0;
+  const trasnoche = h >= 0 && h <= 2 ? 12 : 0;
+  const rand = Math.floor(Math.random() * 10);
+  const categoryScore = (tv * 8 + politica * 7 + futbol * 9 + famosos * 6) / 6;
+  return Math.min(100, Math.round(base + categoryScore + primeBoost + trasnoche + rand));
+}
+
+export default function Page() {
+  const [config, setConfig] = useState<Config>({
+    base: 20,
+    tv: 3,
+    politica: 5,
+    futbol: 2,
+    famosos: 3,
+    override: false,
+  });
+  const [score, setScore] = useState(0);
   const [lockedCelebration, setLockedCelebration] = useState(false);
   const [celebrationUntil, setCelebrationUntil] = useState<number | null>(null);
 
+  const fetchConfig = async () => {
+    try {
+      const res = await fetch("/api/config");
+      const data = await res.json();
+      setConfig(data);
+    } catch {}
+  };
+
   useEffect(() => {
-    const calculateSignals = () => {
-      const now = new Date();
-      const hour = now.getHours();
-
-      const primeTimeBoost = hour >= 21 ? 7 : hour >= 18 ? 4 : 2;
-      const trasnocheBoost = hour >= 0 && hour <= 2 ? 9 : 0;
-      const randomDrama = () => Math.floor(Math.random() * 10);
-
-      setSignals({
-        tv: Math.min(10, primeTimeBoost + Math.floor(Math.random() * 3)),
-        politica: randomDrama(),
-        futbol: randomDrama(),
-        famosos: randomDrama(),
-        hora: hour + trasnocheBoost,
-      });
-    };
-
-    calculateSignals();
-    const interval = setInterval(calculateSignals, 8000);
+    fetchConfig();
+    const interval = setInterval(fetchConfig, 8000);
     return () => clearInterval(interval);
   }, []);
 
-  const score = useMemo(() => {
-    const { tv, politica, futbol, famosos, hora } = signals;
-    let base = tv * 8 + politica * 7 + futbol * 9 + famosos * 6;
-
-    if (hora >= 22) base += 15;
-    if (hora >= 24 || hora <= 2) base += 20;
-
-    const calculated = Math.min(100, Math.round(base / 3));
-    return lockedCelebration ? 100 : calculated;
-  }, [signals, lockedCelebration]);
+  useEffect(() => {
+    setScore(calcScore(config));
+  }, [config]);
 
   useEffect(() => {
     const now = Date.now();
-
     if (celebrationUntil && now < celebrationUntil) {
       setLockedCelebration(true);
       return;
     }
-
     if (score >= 95 && !lockedCelebration) {
       setLockedCelebration(true);
-      setCelebrationUntil(now + 1000 * 60 * 60 * 3); // 3 horas
+      setCelebrationUntil(now + 1000 * 60 * 60 * 3);
     }
-
     if (celebrationUntil && now >= celebrationUntil) {
       setLockedCelebration(false);
       setCelebrationUntil(null);
     }
   }, [score, celebrationUntil, lockedCelebration]);
 
+  const displayScore = lockedCelebration ? 100 : score;
+
   const estado = useMemo(() => {
-    if (score < 20) return "No pasa nada";
-    if (score < 40) return "Timeline tibio";
-    if (score < 60) return "Se está cocinando";
-    if (score < 80) return "Se viene";
-    if (score < 95) return "Noche twitera MUY probable";
-    return "🔥 NOCHE TWITTERA DEL CARAJO";
-  }, [score]);
+    if (displayScore < 20) return phrases[0];
+    if (displayScore < 40) return phrases[1];
+    if (displayScore < 60) return phrases[2];
+    if (displayScore < 80) return phrases[3];
+    if (displayScore < 95) return phrases[4];
+    return phrases[5];
+  }, [displayScore]);
 
-  const escala = [
-    "No pasa nada",
-    "Timeline tibio",
-    "Se cocina",
-    "Se viene",
-    "Hay memes",
-    "NOCHE TWITTERA DEL CARAJO",
-  ];
-
-  const gags = [
-    "Hoy la cosa se puede picar por los dichos de Trump sobre bombardear Irán.",
-    "Si juega Boca y hay VAR polémico, esto se va al rojo en 3 minutos.",
-    "Un ex Gran Hermano acaba de subir una historia sospechosa.",
-    "Hay olor a cadena nacional, capturas y memes de tipografía Impact.",
-  ];
-
-  const gag = gags[score % gags.length];
+  const gag = gags[displayScore % gags.length];
 
   const heatStyle = {
-    height: `${score}%`,
-    opacity: Math.max(0.35, score / 100),
+    height: `${displayScore}%`,
+    opacity: Math.max(0.35, displayScore / 100),
     background:
-      score < 35
+      displayScore < 35
         ? "linear-gradient(to top, #3f3f46, #52525b)"
-        : score < 70
+        : displayScore < 70
         ? "linear-gradient(to top, #f97316, #fb923c)"
         : "linear-gradient(to top, #f97316, #dc2626)",
   };
@@ -124,10 +134,10 @@ export default function Page() {
           <div className="bg-zinc-900 rounded-3xl p-6 shadow-2xl space-y-4">
             <p className="text-zinc-300">Monitoreando señales en tiempo real...</p>
             <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>TV/streaming: {signals.tv}/10</div>
-              <div>Política: {signals.politica}/10</div>
-              <div>Fútbol: {signals.futbol}/10</div>
-              <div>Famosos: {signals.famosos}/10</div>
+              <div>TV/streaming: {config.tv}/10</div>
+              <div>Política: {config.politica}/10</div>
+              <div>Fútbol: {config.futbol}/10</div>
+              <div>Famosos: {config.famosos}/10</div>
             </div>
             <p className="text-xs text-zinc-500">
               Actualización automática cada 8 segundos
@@ -145,19 +155,16 @@ export default function Page() {
             </div>
 
             <div className="h-[420px] flex flex-col justify-between text-xs text-zinc-400 py-2">
-              {escala
-                .slice()
-                .reverse()
-                .map((label, i) => (
-                  <span key={i}>{label}</span>
-                ))}
+              {escala.slice().reverse().map((label, i) => (
+                <span key={i}>{label}</span>
+              ))}
             </div>
           </div>
 
           <div className="text-center">
-            <div className="text-6xl font-bold">{score}%</div>
+            <div className="text-6xl font-bold">{displayScore}%</div>
 
-            {score >= 95 && (
+            {displayScore >= 95 && (
               <div className="mt-4 p-4 rounded-2xl bg-red-600/20 border border-red-500 text-red-200 font-bold text-lg animate-pulse">
                 🎉 SEÑORES, TENEMOS NOCHE TWITTERA 🎉
                 <div className="text-3xl mt-2">🎆 🎊 🧨 🎉</div>
